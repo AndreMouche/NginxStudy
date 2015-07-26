@@ -30,9 +30,12 @@ int              ngx_argc;
 char           **ngx_argv;
 char           **ngx_os_argv;
 
+// 当前操作的进程在ngx_processes数组中的下标
 ngx_int_t        ngx_process_slot;
 ngx_socket_t     ngx_channel;
+// ngx_processes 数组中有意义的ngx_process_t 元素的最大下标
 ngx_int_t        ngx_last_process;
+// 存储所有子进程的数组，定义1024个元素的ngx_processes数组,即最多只能有1024个子进程
 ngx_process_t    ngx_processes[NGX_MAX_PROCESSES];
 
 
@@ -83,6 +86,8 @@ ngx_signal_t  signals[] = {
 };
 
 
+// 生成子进程，会从 ngx_processes 中选择一个还未使用的ngx_process_t元素存储
+// 该子进程相关信息，如果数组已满，即子进程的个数超过了1024，则返回 NGX_INVALID_PID
 ngx_pid_t
 ngx_spawn_process(ngx_cycle_t *cycle, ngx_spawn_proc_pt proc, void *data,
     char *name, ngx_int_t respawn)
