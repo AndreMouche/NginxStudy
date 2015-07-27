@@ -36,10 +36,17 @@ typedef struct {
 
 
 struct ngx_event_s {
+    // ngx事件相关的对象，通常data都是指向 ngx_connection_t 连接对象。
+    // 开启文件异步I/O时，它可能会指向 ngx_event_aio_t 结构体
     void            *data;
 
+    // 标志位，1表示事件是可写的。通常情况下，它表示对应的TCP连接目前状态是可写的，
+    // 也就是连接处于可以发送网络包的状态
     unsigned         write:1;
 
+    // 标志位，1表示此事件可以建立新的连接。通常情况下，在 ngx_cycle_t 中的
+    // listening动态数组中，每一个监听对象 ngx_listening_t 对应的读事件中的
+    // accept 标志位才会是1
     unsigned         accept:1;
 
     /* used to detect the stale events in kqueue, rtsig, and epoll */
@@ -218,20 +225,36 @@ struct ngx_event_aio_s {
 
 
 typedef struct {
+    //事件添加方法，它负责把一个感兴趣的事件添加到操作系统提供的事件
+    //驱动机制（如 epoll,kqueue等）中，这样，在事件发生后，就可以在调用
+    //下面的process_events时获取这个事件
     ngx_int_t  (*add)(ngx_event_t *ev, ngx_int_t event, ngx_uint_t flags);
+    // 删除事件方法，它将把一个已存在于事件驱动机制中的事件移除，这样以后即使这个
+    // 事件发生，调用 process_events 这个方法也无法再获取这个事件
     ngx_int_t  (*del)(ngx_event_t *ev, ngx_int_t event, ngx_uint_t flags);
-
+    // 启用一个事件，目前事件框架不会调用这个方法，大部分事件驱动模块对于该方法
+    // 的实现都是与上面的 add 方法完全一致的。
     ngx_int_t  (*enable)(ngx_event_t *ev, ngx_int_t event, ngx_uint_t flags);
+    // 禁用一个事件，目前事件框架不会调用这个方法，大部分事件驱动模块对于该方法
+    // 的实现都是与上面的del 方法完全一致的
     ngx_int_t  (*disable)(ngx_event_t *ev, ngx_int_t event, ngx_uint_t flags);
-
+     
+    // 向事件驱动机制中添加一个新的连接，这意味着连接上的读写事件都添加到事件驱动
+    // 机制中了
     ngx_int_t  (*add_conn)(ngx_connection_t *c);
+    // 从事件驱动机制中移除一个连接的读写事件
     ngx_int_t  (*del_conn)(ngx_connection_t *c, ngx_uint_t flags);
 
+    // 仅在多线程环境下会被调用，目前，ngx在产品环境下还不会以多线程的方式运行，
+    // 因而这里不做讨论
     ngx_int_t  (*process_changes)(ngx_cycle_t *cycle, ngx_uint_t nowait);
+    // 在正常工作循环中，将调用 process_events 方法来处理事件，
     ngx_int_t  (*process_events)(ngx_cycle_t *cycle, ngx_msec_t timer,
                    ngx_uint_t flags);
 
+    // 初始化事件驱动模块的方法
     ngx_int_t  (*init)(ngx_cycle_t *cycle, ngx_msec_t timer);
+    // 退出事件驱动模块前调用的方法
     void       (*done)(ngx_cycle_t *cycle);
 } ngx_event_actions_t;
 
@@ -484,13 +507,16 @@ typedef struct {
 
 
 typedef struct {
+    // 事件模块名称
     ngx_str_t              *name;
-
+    // 在解析配置项前，这个回调方法用于创建存储配置项参数的结构体
     void                 *(*create_conf)(ngx_cycle_t *cycle);
+    // 在解析配置项结束后，init_conf 方法会被调用，用以综合处理当前事件模块
+    // 感兴趣的全部配置项
     char                 *(*init_conf)(ngx_cycle_t *cycle, void *conf);
-
+    // 对于事件驱动机制，每个事件模块需要实现的10个抽象方法
     ngx_event_actions_t     actions;
-} ngx_event_module_t;
+} ngx_event_module_t;// 事件模块的通用接口
 
 
 extern ngx_atomic_t          *ngx_connection_counter;
