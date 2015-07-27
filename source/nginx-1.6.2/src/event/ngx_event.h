@@ -49,39 +49,66 @@ struct ngx_event_s {
     // accept 标志位才会是1
     unsigned         accept:1;
 
+    //该标志用于区分当前事件是否是过期的，它仅仅是给事件驱动模块使用的，而事件
+    //消费模块可不用关心。为什么需要这个标志位呢？当开始处理一批事件时，
+    //处理前面的事件可能会关闭一些连接，而这些连接有可能影响这批事件中还未处理
+    //到的后面的事件。这时，可通过instance标志位来避免处理后面的已经过期的事件
     /* used to detect the stale events in kqueue, rtsig, and epoll */
     unsigned         instance:1;
 
+    // 标志位，1表示当前事件是活跃的，0表示当前事件不活跃.这个状态对应着事件
+    // 驱动模块处理方式的不同。例如，在添加事件、删除事件和处理事件时，active
+    // 标志位的不同都会对应着不同的处理方式。在使用事件时，一般不会直接改变
+    // active 标志位 
     /*
      * the event was passed or would be passed to a kernel;
      * in aio mode - operation was posted.
      */
     unsigned         active:1;
 
+    // 标志位，1表示禁用事件，仅在kqueue或者rtsig事件驱动模块中有效，而对于
+    // epoll 事件驱动模块则无意义
     unsigned         disabled:1;
 
+    // 标志位，1表示当前事件已经准备就绪，也就是说，允许这个事件的消费模块处理
+    // 这个事件。在http框架中，经常会检查事件的ready标志位以确定是否可以接收
+    // 请求或发送响应
     /* the ready event; in aio mode 0 means that no operation can be posted */
     unsigned         ready:1;
 
+    // 标志位，仅对kqueue, eventport 等模块有意义，对linux上的epoll事件驱动模块
+    // 则无意义
     unsigned         oneshot:1;
 
+    // 用于异步AIO事件的处理
     /* aio operation is complete */
     unsigned         complete:1;
 
+    // 标志位，1表示当前处理的字符流已经结束
     unsigned         eof:1;
+
+    // 标志位，1表示事件在处理过程中出现错误
     unsigned         error:1;
 
+    // 标志位，1表示该事件已经超时，用以提示事件的消费模块做超时处理
+    // 它与 timer_set 都用于定时器
     unsigned         timedout:1;
+    // 标志位，1表示这个事件存在于定时器中
     unsigned         timer_set:1;
 
+    // 标志位，1表示要延迟处理这个事件，它仅用于限速功能
     unsigned         delayed:1;
 
+    // 标志位，1表示延迟建立TCP连接，也就是说，经过TCP三次握手后并不建立连接
+    // 而是要等到真正收到数据包后才会建立TCP连接
     unsigned         deferred_accept:1;
 
+    // 标志位，1表示等待字符流结束，它只与kqueue和aio事件驱动机制有关
     /* the pending eof reported by kqueue, epoll or in aio chain operation */
     unsigned         pending_eof:1;
 
 #if !(NGX_THREADS)
+    // 标志位，1表示正在处理post事件时，当前事件已准备就绪 
     unsigned         posted_ready:1;
 #endif
 
@@ -123,23 +150,31 @@ struct ngx_event_s {
 #if (NGX_HAVE_AIO)
 
 #if (NGX_HAVE_IOCP)
+    // windows系统下的一种事件驱动模型
     ngx_event_ovlp_t ovlp;
 #else
+    // Linux aio机制中定义的结构体
     struct aiocb     aiocb;
 #endif
 
 #endif
 
+    // 由于epoll事件驱动方式不使用index,这里不说明
     ngx_uint_t       index;
 
+    // 可用于记录 error_log 日志的 ngx_log_t对象
     ngx_log_t       *log;
 
+    // 定时器节点，用于定时器红黑树中
     ngx_rbtree_node_t   timer;
 
+    // 标志位，1表示当前事件已关闭，epoll模块没有使用它
     unsigned         closed:1;
 
+    // 该标志位目前无实际意义
     /* to test on worker exit */
     unsigned         channel:1;
+    // 目前该标志位无实际意义
     unsigned         resolver:1;
 
 #if (NGX_THREADS)
@@ -166,6 +201,9 @@ struct ngx_event_s {
 
 #endif
 
+    // post事件将会构成一个队列再统一处理，这个队列以next和prev作为链表指针，
+    // 以此构成一个简易的双向链表，其中next指向后一个事件的地址，prev指向前
+    // 一个事件的地址
     /* the links of the posted queue */
     ngx_event_t     *next;
     ngx_event_t    **prev;
